@@ -57,7 +57,7 @@ public with sharing class DataTrainController {
     @AuraEnabled
     public static Id start(String rootId, String objectName, List<String> relationships) {
         Schema.DescribeSObjectResult d = describeLocal(objectName);
-        if (String.isBlank(rootId) || !Id.isValid(rootId) ||
+        if (String.isBlank(rootId) || !isValidRecordId(rootId) ||
             ((Id) rootId).getSObjectType() != Schema.getGlobalDescribe().get(objectName))
             throw new AuraHandledException('Enter one source record ID for the selected object.');
         if (relationships == null) relationships = new List<String>();
@@ -71,7 +71,7 @@ public with sharing class DataTrainController {
         Data_Train_Run__c run = new Data_Train_Run__c(
             Source_Object__c = objectName, Source_Record_Id__c = rootId,
             Status__c = 'Queued', Result__c = 'Awaiting transfer.');
-        insert run;
+        insert as user run;
         System.enqueueJob(new DataTrainWorker(run.Id, rootId, objectName, relationships));
         return run.Id;
     }
@@ -80,6 +80,19 @@ public with sharing class DataTrainController {
     public static Data_Train_Run__c status(Id runId) {
         return [SELECT Id, Status__c, Result__c, Destination_Record_Id__c
                 FROM Data_Train_Run__c WHERE Id = :runId WITH USER_MODE LIMIT 1];
+    }
+
+    /** Validates record IDs using the Apex ID parser, including the object prefix. */
+    public static Boolean isValidRecordId(String value) {
+        if (String.isBlank(value)) {
+            return false;
+        }
+        try {
+            Id recordId = (Id) value;
+            return recordId.getSObjectType() != null;
+        } catch (System.StringException ex) {
+            return false;
+        }
     }
 
     public static Schema.DescribeSObjectResult describeLocal(String name) {
@@ -109,8 +122,9 @@ public with sharing class DataTrainController {
             targetFields.put((String) field.get('name'), field);
         }
         Map<String, Schema.SObjectField> sourceFields = source.fields.getMap();
-        for (String name : sourceFields.keySet()) {
-            Schema.DescribeFieldResult sf = sourceFields.get(name).getDescribe();
+        for (String fieldKey : sourceFields.keySet()) {
+            Schema.DescribeFieldResult sf = sourceFields.get(fieldKey).getDescribe();
+            String name = sf.getName();
             Map<String, Object> tf = targetFields.get(name);
             if (!sf.isAccessible() || !sf.isCreateable() || tf == null || tf.get('createable') != true) {
                 if (sf.isAccessible() && sf.isCreateable() && tf == null) result.unavailableFields.add(name);

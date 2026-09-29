@@ -1,2 +1,2 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata"><label>Data Train</label><navType>Standard</navType><tabs>Data_Train</tabs><uiType>Lightning</uiType></CustomApplication>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata"><formFactors>Large</formFactors><label>Data Train</label><navType>Standard</navType><tabs>Data_Train</tabs><uiType>Lightning</uiType></CustomApplication>

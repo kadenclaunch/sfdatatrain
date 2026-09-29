@@ -36,13 +36,9 @@ public with sharing class DataTrainGraph {
     private Integer totalFileBytes = 0;
 
     public static Plan build(String objectName, String rootId, List<String> relations) {
-        if (String.isBlank(rootId) || !Id.isValid(rootId))
+        if (String.isBlank(rootId) || !DataTrainController.isValidRecordId(rootId))
             throw new AuraHandledException('Enter a valid source record ID.');
         Schema.DescribeSObjectResult d = DataTrainController.describeLocal(objectName);
-        if (objectName == 'ContentVersion' || objectName == 'ContentDocumentLink' || objectName == 'Attachment') {
-            addBinary(sourceId, objectName, reason, depth);
-            return;
-        }
         if (((Id) rootId).getSObjectType() != Schema.getGlobalDescribe().get(objectName))
             throw new AuraHandledException('The record ID does not match the chosen object.');
         DataTrainGraph graph = new DataTrainGraph();
@@ -65,7 +61,7 @@ public with sharing class DataTrainGraph {
                 break;
             }
             // Discover one extra ID so the preview can block truncation instead of silently dropping data.
-            List<SObject> children = Database.query('SELECT Id FROM ' + child + ' WHERE ' + field +
+            List<SObject> children = Database.query('SELECT Id FROM ' + String.escapeSingleQuotes(child) + ' WHERE ' + String.escapeSingleQuotes(field) +
                 ' = :rootId WITH USER_MODE LIMIT ' + (remaining + 1));
             if (children.size() > remaining) {
                 graph.result.blockers.add(relation + ' has more records than this bounded plan can transfer.');
@@ -86,6 +82,10 @@ public with sharing class DataTrainGraph {
             return;
         }
         Schema.DescribeSObjectResult d = DataTrainController.describeLocal(objectName);
+        if (objectName == 'ContentVersion' || objectName == 'ContentDocumentLink' || objectName == 'Attachment') {
+            addBinary(sourceId, objectName, reason, depth);
+            return;
+        }
         Map<String, Object> remote = destination(objectName);
         if (remote.get('createable') != true) {
             result.blockers.add(objectName + ' cannot be created in the destination.');
@@ -98,8 +98,9 @@ public with sharing class DataTrainGraph {
         }
         List<String> selected = new List<String>{'Id'};
         Map<String, Schema.DescribeFieldResult> usable = new Map<String, Schema.DescribeFieldResult>();
-        for (String name : d.fields.getMap().keySet()) {
-            Schema.DescribeFieldResult sf = d.fields.getMap().get(name).getDescribe();
+        for (String fieldKey : d.fields.getMap().keySet()) {
+            Schema.DescribeFieldResult sf = d.fields.getMap().get(fieldKey).getDescribe();
+            String name = sf.getName();
             Map<String, Object> tf = target.get(name);
             if (sf.isAccessible() && tf != null && tf.get('createable') == true && name != 'Id') {
                 // Binary and compound fields require object-specific API handling.
@@ -109,7 +110,7 @@ public with sharing class DataTrainGraph {
                 selected.add(name);
             }
         }
-        SObject row = Database.query('SELECT ' + String.join(selected, ',') + ' FROM ' + objectName +
+        SObject row = Database.query('SELECT ' + String.join(selected, ',') + ' FROM ' + String.escapeSingleQuotes(d.getName()) +
             ' WHERE Id = :sourceId WITH USER_MODE LIMIT 1');
         Node node = new Node();
         node.key = key; node.sourceId = key; node.objectName = objectName; node.reason = reason;
@@ -202,7 +203,7 @@ public with sharing class DataTrainGraph {
                 relatedRecord = link.LinkedEntityId;
                 version = [SELECT Id, Title, PathOnClient, Description, ContentSize, ContentLocation
                            FROM ContentVersion WHERE ContentDocumentId = :link.ContentDocumentId
-                           AND IsLatest = true LIMIT 1];
+                           AND IsLatest = true WITH USER_MODE LIMIT 1];
             } else {
                 version = [SELECT Id, Title, PathOnClient, Description, ContentSize, ContentLocation, FirstPublishLocationId
                            FROM ContentVersion WHERE Id = :sourceId WITH USER_MODE LIMIT 1];
@@ -239,7 +240,7 @@ public with sharing class DataTrainGraph {
 
     private void inspectArticle(Node node, Id sourceId, Schema.DescribeSObjectResult source) {
         if (source.fields.getMap().containsKey('IsMasterLanguage')) {
-            SObject article = Database.query('SELECT IsMasterLanguage, PublishStatus FROM ' + node.objectName +
+            SObject article = Database.query('SELECT IsMasterLanguage, PublishStatus FROM ' + String.escapeSingleQuotes(source.getName()) +
                 ' WHERE Id = :sourceId WITH USER_MODE LIMIT 1');
             if (article.get('IsMasterLanguage') == false)
                 result.blockers.add('Translated Knowledge versions require a separate translation workflow.');
@@ -248,7 +249,7 @@ public with sharing class DataTrainGraph {
         String categories = node.objectName.replace('__kav', '__DataCategorySelection');
         Schema.SObjectType categoryType = Schema.getGlobalDescribe().get(categories);
         if (categoryType != null && categoryType.getDescribe().isQueryable()) {
-            List<SObject> assigned = Database.query('SELECT Id FROM ' + categories +
+            List<SObject> assigned = Database.query('SELECT Id FROM ' + String.escapeSingleQuotes(categoryType.getDescribe().getName()) +
                 ' WHERE ParentId = :sourceId WITH USER_MODE LIMIT 11');
             if (assigned.size() > 10) result.blockers.add('Knowledge article has more than 10 category assignments.');
             else if (!assigned.isEmpty()) {
