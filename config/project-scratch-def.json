@@ -1,0 +1,10 @@
+{
+  "orgName": "Data Train Package Test",
+  "edition": "Developer",
+  "features": ["Knowledge"],
+  "settings": {
+    "lightningExperienceSettings": {
+      "enableS1DesktopEnabled": true
+    }
+  }
+}

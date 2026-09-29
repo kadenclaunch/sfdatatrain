@@ -37,3 +37,9 @@ sfca_results.json
 
 # Local environment variables
 .env
+
+# AI agent skills and local assistant configuration
+.agents/
+.codex/
+.claude/
+skills-lock.json

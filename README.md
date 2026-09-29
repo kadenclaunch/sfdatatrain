@@ -63,3 +63,30 @@ This project is maintained in [kadenclaunch/sfdatatrain](https://github.com/kade
 The repository also includes 250 Salesforce skill packages in `.agents/skills/` and their source records in `skills-lock.json`.
 
 Application files were imported from the downloaded `data-train` folder on September 29, 2026. The original download was preserved.
+
+## Managed package distribution
+
+The repository is configured for a second-generation managed package named `DataTrain` with the intended namespace `datatrain`. The namespace must be registered in a Salesforce packaging org before the first package version can be created. If a different namespace is registered, update `namespace` in `sfdx-project.json` before creating the package.
+
+### Create the package once
+
+Authenticate a Dev Hub and a packaging org, then run:
+
+```bash
+sf org login web --alias DataTrainDevHub --set-default-dev-hub
+sf package create --name DataTrain --package-type Managed --path force-app --target-dev-hub DataTrainDevHub --description "Cross-org record transfer for Salesforce" --error-notification YOUR_EMAIL --json
+```
+
+Copy the returned package ID into `sfdx-project.json` as `packageAliases.DataTrain`. The package namespace must match the registered namespace.
+
+### Create and test a package version
+
+```bash
+sf package version create --package DataTrain --installation-key-bypass --wait 30 --code-coverage --target-dev-hub DataTrainDevHub --json
+sf package version list --packages DataTrain --target-dev-hub DataTrainDevHub
+sf package install --package 04tXXXXXXXXXXXX --target-org SourceSandbox --wait 30 --publish-wait 30
+```
+
+Install the package in the source org, assign `Data Train Operator`, and configure the `Data_Train_Destination` Named Credential. The package does not create destination objects or fields; the destination org must already have compatible schema and permissions.
+
+Package creation cannot be completed from this repository alone. Salesforce requires a Dev Hub, a registered namespace, package ownership, and an authenticated packaging org.

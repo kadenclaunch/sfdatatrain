@@ -1,7 +1,15 @@
 {
-  "packageDirectories": [{ "path": "force-app", "default": true }],
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true,
+      "package": "DataTrain",
+      "versionName": "Data Train 1.0",
+      "versionNumber": "1.0.0.NEXT"
+    }
+  ],
   "name": "data-train",
-  "namespace": "",
+  "namespace": "datatrain",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "65.0"
 }
