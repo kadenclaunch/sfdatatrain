@@ -1,23 +1,65 @@
-# Data Train — Salesforce App
+# Data Train
 
-Project workspace for Data Train, connected to [kadenclaunch/sfdatatrain](https://github.com/kadenclaunch/sfdatatrain).
+Data Train is a Salesforce Lightning app for copying records from a **source org** into an **existing destination org**. It does not create objects or fields, and it does not delete the source record. Install this project in the source org and configure a destination Named Credential.
 
-## Current contents
+## How a transfer works
 
-- `.agents/skills/`: 250 Salesforce skill packages migrated from the original Data Train workspace.
-- `skills-lock.json`: skill source and version records.
-- `.gitignore`: excludes local Salesforce authentication/cache files, logs, and environment settings.
+1. Pick a source object and enter one source record ID. The object picker includes standard objects and Knowledge article versions (`__kav`).
+2. Choose direct related lists, such as Contacts on an Account or Case Comments on a Case. Salesforce Files and legacy Attachments are selected by default when the relationships are available.
+3. Build a transfer plan. Data Train reads the selected record, follows its createable lookup fields to discover parent records, follows the selected direct child relationships, and continues up to three lookup levels. The preview lists each discovered record, its reason for inclusion, blockers, and warnings.
+4. Start the run. The worker rebuilds the plan, creates parent dependencies first, replaces source lookup IDs with new destination IDs, and updates optional lookup cycles when the destination field is updateable. It then transfers selected files and article categories, and publishes copied master articles when the source version was online.
+5. Refresh the run to inspect a per-record ID log and the result.
 
-The original workspace contained skills and configuration only. Application source code, a Salesforce DX project, and deployment configuration have not yet been created or imported.
+The destination's matching fields must already exist. Createable scalar values are copied; unsupported and unavailable fields are omitted. Record Types are matched by **object API name and DeveloperName**. User and queue references use destination defaults when permitted; required unmapped references block the plan. Destination validation, duplicate rules, flows, triggers, and restricted picklist values can still reject the insert.
 
-## Work in VS Code
+## Coverage and limits
 
-Open this repository folder in VS Code. On the original Mac, it is located at `/Users/kadenclaunch/sfdatatrain`.
+| Example | Behavior in this version |
+| --- | --- |
+| Account, Lead, Contact, Case | Metadata driven record copy with parent lookup discovery and selected direct child lists. Actual success depends on destination configuration and permissions. |
+| Case → Account/Contact | Referenced parents are discovered and copied if createable, with new IDs assigned to the Case. |
+| Account → Contacts | Choose the Contacts related list; the child lookup is mapped to the new Account. |
+| Knowledge master article (`Knowledge__kav` or another `__kav`) | Copies common createable content fields into a new draft, matches Record Type by DeveloperName, copies up to ten data category assignments, and publishes the new version when the selected source version is online. Source and destination must have compatible Knowledge, article fields, languages, and data categories. |
+| Salesforce Files (`ContentDocumentLink` or `ContentVersion`) | Copies the latest stored file version using base64 `VersionData` and links it to the new parent with `FirstPublishLocationId`. File versions/history, multiple sharing links, external file references, and link visibility settings are not preserved. |
+| Legacy Attachment | Copies its binary Body and metadata to the remapped parent. |
+| Translated Knowledge versions | Explicitly blocked pending a separate translation workflow. |
+| History, feed, and other system-managed objects | Destination createability check blocks objects Salesforce does not allow the integration user to insert. |
 
-For another computer, clone this repository and open the cloned folder in VS Code. The skill packages are included in the repository.
+One plan supports up to **30 records**, **12 direct related lists**, and **three levels of parent lookup traversal**. Files are limited to **2 MiB each** and **5 MiB total per run** in this Apex worker. It does not recursively traverse children's children or automatically include every related list. Discovery is bounded so a selected Account does not pull in an entire org. Missing source permissions, target features, required fields, validation rules, and special record semantics are reported through the plan or destination error.
 
-Use VS Code Source Control to review changes, commit, and sync with GitHub. Keep credentials and local Salesforce authentication files out of commits.
+**Important:** This is a sandbox prototype. It cannot guarantee that *any* standard record can be copied successfully: some Salesforce records are generated by the platform, some object operations differ from ordinary sObject inserts, and org schemas and enabled features may not match. A failed run can leave already-created destination records in place. There is no deduplication, rollback, resume, or persistent cross-run ID map. Check the run log before attempting another transfer.
 
-## Migration
+## Configure two sandbox orgs
 
-Copied from `/Users/kadenclaunch/Documents/ChatGPT/Data Train - Salesforce App` on September 29, 2026. The original folder was preserved, and the destination repository retains its existing Git history.
+1. In the **destination**, create an External Client App with API access for a dedicated integration identity. Grant only the object and field access needed. Salesforce recommends External Client Apps for new integrations.
+2. In the **source**, create an External Credential and a Named Credential with API name **`Data_Train_Destination`**. Point it at the destination org's base URL, enable an authorization header, authenticate the principal, and give Data Train operators access to the credential. Do not append `/services/data` to the URL.
+3. From this directory, deploy to the source sandbox with `sf project deploy start --source-dir force-app --target-org YOUR_SOURCE_ALIAS`. Assign the **Data Train Operator** permission set.
+4. Run `sf apex run test --tests DataTrainGraphTest --target-org YOUR_SOURCE_ALIAS --result-format human`. The test includes Account → Contact, Salesforce File, and legacy Attachment paths. Start with a small test record in two sandboxes; inspect the destination and the log before trying Case or Knowledge.
+
+The Salesforce CLI and org credentials are not included here. The project uses REST API `v65.0` in the Apex files; adjust both callout paths together if needed.
+
+## Next production work
+
+- Persist source-to-destination ID mappings with destination org identity and idempotent retry behavior.
+- Add a streaming external worker for larger files, multiple file links/versions, Knowledge translations, embedded images, and object-specific adapters for platform-managed records.
+- Add depth and volume controls backed by resumable jobs and Bulk API 2.0, plus destination reconciliation.
+- Map owners, queues, currencies, and feature-specific values; detect validation rules, duplicate policies, and picklist mismatches before writes.
+- Test across source/destination sandboxes with differing feature sets and permissions. Add recovery for partial runs.
+
+## Salesforce documentation
+
+- [sObject Describe](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-sobject-describe.html)
+- [Knowledge article and version model](https://developer.salesforce.com/docs/service/salesforce-knowledge-dev-guide/guide/knowledge-development-object-managing-articles.html)
+- [Publishing a Knowledge master article](https://developer.salesforce.com/docs/service/salesforce-knowledge-dev-guide/guide/knowledge-rest-publish-master-version.html)
+- [ContentVersion and file links](https://help.salesforce.com/s/articleView?id=000382372&language=en_US&type=1)
+- [Named Credentials](https://developer.salesforce.com/docs/platform/named-credentials/guide/get-started.html)
+- [External Client Apps and OAuth](https://developer.salesforce.com/docs/platform/api-rest/guide/intro-oauth-and-connected-apps.html)
+- [Bulk API 2.0](https://developer.salesforce.com/docs/platform/api-asynch/guide/bulk-api-2-0.html)
+
+## Repository and VS Code
+
+This project is maintained in [kadenclaunch/sfdatatrain](https://github.com/kadenclaunch/sfdatatrain). Open the repository root in VS Code to work with the Salesforce DX project.
+
+The repository also includes 250 Salesforce skill packages in `.agents/skills/` and their source records in `skills-lock.json`.
+
+Application files were imported from the downloaded `data-train` folder on September 29, 2026. The original download was preserved.

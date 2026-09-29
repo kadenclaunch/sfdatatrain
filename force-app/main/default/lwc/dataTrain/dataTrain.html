@@ -1,0 +1,47 @@
+<template>
+    <lightning-card title="Data Train" icon-name="standard:data_integration_hub">
+        <div class="slds-p-around_medium">
+            <p class="slds-m-bottom_medium">Choose a source record and related lists. Files and Attachments are selected when available. Data Train finds referenced parents and shows a transfer plan before copying.</p>
+            <lightning-combobox label="Source object" value={objectName} options={objects} onchange={onObject} placeholder="Choose an object"></lightning-combobox>
+            <lightning-input class="slds-m-top_small" label="Source record ID" value={recordId} onchange={onRecord} placeholder="18-character Salesforce ID"></lightning-input>
+            <template if:true={objectName}>
+                <lightning-dual-listbox class="slds-m-top_medium" label="Related lists to transfer" source-label="Available" selected-label="Selected" options={relationships} value={selected} onchange={onRelated}></lightning-dual-listbox>
+                <div class="slds-m-top_medium">
+                    <lightning-button label="Build transfer plan" onclick={check} disabled={busy}></lightning-button>
+                </div>
+            </template>
+            <template if:true={busy}><lightning-spinner alternative-text="Working" size="small"></lightning-spinner></template>
+            <template if:true={report}>
+                <div class="slds-box slds-m-top_medium">
+                    <p><strong>Destination check:</strong> {report}</p>
+                    <template if:true={planRecords.length}>
+                        <div class="slds-scrollable_x slds-m-top_small">
+                            <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                <thead><tr><th scope="col">#</th><th scope="col">Object</th><th scope="col">Source ID</th><th scope="col">Reason</th><th scope="col">Mapped lookups</th></tr></thead>
+                                <tbody><template for:each={planRecords} for:item="record">
+                                    <tr key={record.key}><td>{record.number}</td><td>{record.objectName}</td><td>{record.sourceId}</td><td>{record.reason}</td><td>{record.lookups}</td></tr>
+                                </template></tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <template if:true={planWarnings.length}>
+                        <p class="slds-m-top_small"><strong>Warnings:</strong></p>
+                        <ul class="slds-list_dotted"><template for:each={planWarnings} for:item="warning"><li key={warning}>{warning}</li></template></ul>
+                    </template>
+                    <template if:true={canStart}>
+                        <lightning-button variant="brand" class="slds-m-top_small" label="Start transfer" onclick={start} disabled={busy}></lightning-button>
+                    </template>
+                </div>
+            </template>
+            <template if:true={runId}>
+                <div class="slds-box slds-m-top_medium">
+                    <p><strong>Run:</strong> {runId}</p>
+                    <p><strong>Status:</strong> {runStatus}</p>
+                    <pre class="result">{runResult}</pre>
+                    <lightning-button label="Refresh status" onclick={refresh} disabled={busy}></lightning-button>
+                </div>
+            </template>
+            <template if:true={error}><p role="alert" class="slds-text-color_error slds-m-top_medium">{error}</p></template>
+        </div>
+    </lightning-card>
+</template>
