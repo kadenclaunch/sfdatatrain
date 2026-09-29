@@ -9,7 +9,7 @@
     }
   ],
   "name": "data-train",
-  "namespace": "datatrain",
+  "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "65.0"
 }

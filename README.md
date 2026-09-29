@@ -66,27 +66,31 @@ Application files were imported from the downloaded `data-train` folder on Septe
 
 ## Managed package distribution
 
-The repository is configured for a second-generation managed package named `DataTrain` with the intended namespace `datatrain`. The namespace must be registered in a Salesforce packaging org before the first package version can be created. If a different namespace is registered, update `namespace` in `sfdx-project.json` before creating the package.
+The source is prepared for a second-generation managed package named `DataTrain`. No managed package or installable version has been created yet. The `namespace` entry in `sfdx-project.json` is intentionally empty because no registered namespace has been confirmed. Do not create the package until the correct namespace and Dev Hub are known: Salesforce binds both to the package permanently.
 
 ### Create the package once
 
-Authenticate a Dev Hub and a packaging org, then run:
+1. Register a namespace in a Salesforce namespace org and link it to the Dev Hub's Namespace Registry. Enable second-generation packaging in that Dev Hub.
+2. Authenticate the Dev Hub with `sf org login web --alias DataTrainDevHub --set-default-dev-hub` (or use an existing authenticated alias).
+3. Set `namespace` in `sfdx-project.json` to the **registered, linked namespace**. Keep the package name `DataTrain` unless an existing package already owns that name.
+4. Create the package:
 
 ```bash
-sf org login web --alias DataTrainDevHub --set-default-dev-hub
-sf package create --name DataTrain --package-type Managed --path force-app --target-dev-hub DataTrainDevHub --description "Cross-org record transfer for Salesforce" --error-notification YOUR_EMAIL --json
+sf package create --name DataTrain --package-type Managed --path force-app --target-dev-hub DataTrainDevHub --description "Cross-org record transfer for Salesforce" --json
 ```
 
-Copy the returned package ID into `sfdx-project.json` as `packageAliases.DataTrain`. The package namespace must match the registered namespace.
+Salesforce CLI adds the package ID to `packageAliases` in `sfdx-project.json`; commit that change. If `DataTrain` already exists in the Dev Hub, use its package ID instead of creating another package.
 
 ### Create and test a package version
 
 ```bash
-sf package version create --package DataTrain --installation-key-bypass --wait 30 --code-coverage --target-dev-hub DataTrainDevHub --json
+sf package version create --package DataTrain --definition-file config/project-scratch-def.json --installation-key-bypass --code-coverage --wait 60 --target-dev-hub DataTrainDevHub --json
 sf package version list --packages DataTrain --target-dev-hub DataTrainDevHub
 sf package install --package 04tXXXXXXXXXXXX --target-org SourceSandbox --wait 30 --publish-wait 30
 ```
 
-Install the package in the source org, assign `Data Train Operator`, and configure the `Data_Train_Destination` Named Credential. The package does not create destination objects or fields; the destination org must already have compatible schema and permissions.
+Replace the example `04t` ID with the subscriber package version ID returned by version creation. Install into a **source** org first, assign the packaged `Data Train Operator` permission set, and then configure a destination Named Credential named `Data_Train_Destination`. Set its URL to the destination org base URL and authenticate its External Credential principal. A subscriber-created Named Credential must allow the package namespace to make callouts. The destination org must already have compatible schema and permissions; the package does not create destination objects or fields.
 
-Package creation cannot be completed from this repository alone. Salesforce requires a Dev Hub, a registered namespace, package ownership, and an authenticated packaging org.
+Package versions are immutable. Test the install and a small Account transfer between two sandboxes before promoting or distributing a version. The current connected `Kaden Sandbox` is an install/test target; it is not a Dev Hub.
+
+Salesforce references: [namespace registration](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-create-namespace.html), [package creation](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-create-pkg-base.html), [package versions](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-create-pkg-ver.html), and [Named Credential packaging](https://developer.salesforce.com/docs/platform/named-credentials/guide/nc-package-credentials.html).
